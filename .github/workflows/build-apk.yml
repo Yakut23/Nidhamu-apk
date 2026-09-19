@@ -23,9 +23,6 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Install npm dependencies
         run: npm install
 
@@ -40,6 +37,9 @@ jobs:
 
       - name: Give execute permission to gradlew
         run: chmod +x android/gradlew
+
+      - name: Accept Android SDK licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Build debug APK
         working-directory: android
