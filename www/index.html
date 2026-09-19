@@ -54,6 +54,19 @@
     --overlay:rgba(20,22,28,0.4);
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body,#app{
+    -webkit-user-select:none;
+    -moz-user-select:none;
+    -ms-user-select:none;
+    user-select:none;
+    -webkit-touch-callout:none;
+  }
+  input, textarea{
+    -webkit-user-select:text;
+    -moz-user-select:text;
+    -ms-user-select:text;
+    user-select:text;
+  }
   html,body{height:100%;}
   body{
     margin:0;
@@ -2097,10 +2110,86 @@ function init(){
   }, 60000);
 }
 
+/* ---------- Native fullscreen (hide status bar on Android/iOS) ---------- */
+function setupNativeFullscreen(){
+  try{
+    const Capacitor = window.Capacitor;
+    if(!Capacitor || !Capacitor.isNativePlatform || !Capacitor.isNativePlatform()) return;
+    const StatusBar = Capacitor.Plugins && Capacitor.Plugins.StatusBar;
+    if(!StatusBar) return;
+    if(StatusBar.hide) StatusBar.hide();
+    if(StatusBar.setOverlaysWebView) StatusBar.setOverlaysWebView({ overlay:true });
+    const AppPlugin = Capacitor.Plugins && Capacitor.Plugins.App;
+    if(AppPlugin && AppPlugin.addListener){
+      AppPlugin.addListener('resume', ()=>{ if(StatusBar.hide) StatusBar.hide(); });
+    }
+  }catch(e){ /* not running inside Capacitor, ignore */ }
+}
+
+/* ---------- Swipe-down-to-close for all bottom sheets / modals ---------- */
+(function(){
+  const sheet = document.getElementById('modalSheet');
+  const overlay = document.getElementById('modalOverlay');
+  if(!sheet || !overlay) return;
+  const CLOSE_THRESHOLD = 90;
+  let startY = 0, deltaY = 0, dragging = false, allowDrag = false;
+
+  function resetSheet(){
+    sheet.style.transition = 'transform .2s ease';
+    sheet.style.transform = '';
+  }
+  function onStart(clientY){
+    if(!overlay.classList.contains('open')) return;
+    allowDrag = sheet.scrollTop <= 0;
+    if(!allowDrag) return;
+    startY = clientY; deltaY = 0; dragging = true;
+    sheet.style.transition = 'none';
+  }
+  function onMove(clientY){
+    if(!dragging || !allowDrag) return;
+    deltaY = clientY - startY;
+    if(deltaY < 0) deltaY = 0;
+    sheet.style.transform = `translateY(${deltaY}px)`;
+  }
+  function onEnd(){
+    if(!dragging){ return; }
+    dragging = false;
+    if(allowDrag && deltaY > CLOSE_THRESHOLD){
+      sheet.style.transition = 'transform .18s ease';
+      sheet.style.transform = 'translateY(100%)';
+      setTimeout(()=>{ closeModal(); resetSheet(); }, 160);
+    } else {
+      resetSheet();
+    }
+    allowDrag = false;
+  }
+
+  sheet.addEventListener('touchstart', e=>onStart(e.touches[0].clientY), {passive:true});
+  sheet.addEventListener('touchmove', e=>onMove(e.touches[0].clientY), {passive:true});
+  sheet.addEventListener('touchend', onEnd);
+  sheet.addEventListener('touchcancel', onEnd);
+  // Mouse support (desktop testing)
+  sheet.addEventListener('mousedown', e=>onStart(e.clientY));
+  window.addEventListener('mousemove', e=>{ if(dragging) onMove(e.clientY); });
+  window.addEventListener('mouseup', onEnd);
+})();
+
 applyTheme();
+setupNativeFullscreen();
 if(Store.get('launched', false)){
   init();
 }
+
+/* ---------- Zuia copy/cut/right-click nje ya sehemu za kuandika ---------- */
+(function(){
+  function isEditable(el){
+    return el && (el.tagName==='INPUT' || el.tagName==='TEXTAREA' || el.isContentEditable);
+  }
+  document.addEventListener('copy', function(e){ if(!isEditable(e.target)) e.preventDefault(); });
+  document.addEventListener('cut', function(e){ if(!isEditable(e.target)) e.preventDefault(); });
+  document.addEventListener('contextmenu', function(e){ if(!isEditable(e.target)) e.preventDefault(); });
+  document.addEventListener('selectstart', function(e){ if(!isEditable(e.target)) e.preventDefault(); });
+})();
 </script>
 </body>
 </html>
